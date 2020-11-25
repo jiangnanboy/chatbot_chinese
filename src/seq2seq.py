@@ -203,8 +203,8 @@ def train(model, iterator, optimizer, criterion, clip):
     epoch_loss = 0
     
     for i, batch in enumerate(iterator):
-        src = batch.src # src=[batch_size, seq_len]
-        trg = batch.trg # trg=[batch_size, seq_len]
+        src, _= batch.src # src=[batch_size, seq_len]，这里batch.src返回src和src的长度，因为在使用torchtext.Field时设置include_lengths=True
+        trg, _ = batch.trg # trg=[batch_size, seq_len]
         src = src.to(device)
         trg = trg.to(device)
         output = model(src, trg, 1) # output=[batch_size, seq_len, output_dim]
@@ -230,8 +230,8 @@ def evaluate(model, iterator, criterion):
     epoch_loss = 0
     with torch.no_grad():#不更新梯度
         for i, batch in enumerate(iterator):
-            src = batch.src # src=[batch_size, seq_len]
-            trg = batch.trg # trg=[batch_size, seq_len]
+            src, _ = batch.src # src=[batch_size, seq_len]
+            trg, _ = batch.trg # trg=[batch_size, seq_len]
             src = src.to(device)
             trg = trg.to(device)
             # output=[batch_size, seq_len, output_dim]
@@ -292,12 +292,19 @@ if __name__ == '__main__':
     if args.type == 'train':
         data_directory = os.path.join(parent_directory, 'data') + '\\'
 
+        #如果词典存在，则加载
+        vocab = None
+        if os.path.exists(config.get(section, 'vocab')):
+            vocab = load_vocab(config.get(section, 'vocab'))
+
         #加载训练数据
         source, train_iterator, val_iterator = build_field_dataset_vocab(data_directory,
                                                                          config.get(section, 'chat_source_name'),
-                                                                         config.get(section, 'chat_target_name'))
+                                                                         config.get(section, 'chat_target_name'),
+                                                                         vocab)
         #保存source的词典
-        save_vocab(source.vocab, config.get(section, 'vocab'))
+        if vocab == None:
+            save_vocab(source.vocab, config.get(section, 'vocab'))
 
         model,optimizer,scheduler,criterion = build_model(source,
                                                           config.getint(section, 'encoder_embedding_dim'),
