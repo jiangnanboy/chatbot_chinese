@@ -303,7 +303,7 @@ if __name__ == '__main__':
                                                                          config.get(section, 'chat_target_name'),
                                                                          vocab)
         #保存source的词典
-        if vocab == None:
+        if vocab is None:
             save_vocab(source.vocab, config.get(section, 'vocab'))
 
         model,optimizer,scheduler,criterion = build_model(source,

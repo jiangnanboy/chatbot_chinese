@@ -29,7 +29,7 @@ def build_field_dataset_vocab(data_directory, src_name, trg_name, vocab):
                                              exts=(src_name, trg_name),
                                              fields=(source, source))  # source与target共用vocab可使用同一个Fields
     # 创建词汇表
-    if vocab == None:
+    if vocab is None:
         source.build_vocab(train_data, min_freq=2)
     else:
         source.vocab = vocab
