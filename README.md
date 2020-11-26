@@ -17,7 +17,17 @@ Chinese chatbot for neural machine translation in PyTorch.
 * Encoder: GRU
 * Decoder: GRU
 
-
+## Use
+- seq2seq
+```
+python seq2seq.py -type train
+python seq2seq.py -type predict
+```
+- seq2seq_attention
+```
+python seq2seq_attention.py -type train
+python seq2seq_attention.py -type predict
+```
 
 ## Requirements
 
