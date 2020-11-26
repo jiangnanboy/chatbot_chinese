@@ -18,6 +18,10 @@ Chinese chatbot for neural machine translation in PyTorch.
 * Decoder: GRU
 
 ## Use
+- parameters setting
+```
+resource/config.cfg
+```
 - seq2seq
 ```
 python seq2seq.py -type train
@@ -28,6 +32,7 @@ python seq2seq.py -type predict
 python seq2seq_attention.py -type train
 python seq2seq_attention.py -type predict
 ```
+
 
 ## Requirements
 
