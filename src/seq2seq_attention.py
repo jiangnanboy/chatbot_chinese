@@ -57,7 +57,7 @@ class Attention(nn.Module):
         super(Attention, self).__init__()
         self.method = method
         if self.method not in ['dot', 'general', 'concat']:
-            raise ValueError(self.method, '请选择合适的流程意计算方法')
+            raise ValueError(self.method, '请选择合适的权重计算方法')
         self.hidden_dim = hidden_dim
         if self.method == 'general':
             self.attn = nn.Linear(self.hidden_dim, hidden_dim)
@@ -79,7 +79,7 @@ class Attention(nn.Module):
         return torch.sum(self.v * energy, dim=2) #[batch_size, seq_len]
 
     def forward(self, decoder_output, encoder_output):
-        #hidden=[batch_size, 1, n_directions*hidden_dim]
+        #decoder_output=[batch_size, 1, n_directions*hidden_dim]
         #encoder_output=[batch_size, seq_len, hidden_dim*n_ndirections]
         if self.method == 'general':
             attn_energies = self.general_score(decoder_output, encoder_output)
@@ -121,11 +121,15 @@ class Decoder(nn.Module):
         '''
         attention_weights = self.attention(decoder_output, encoder_output)#计算attention权重
         # attention_weights=[batch_size, 1, seq_len]
-        #以下是计算上下文
+        '''
+        以下是计算上下文：
+        注意力权重分布用于产生编码器隐藏状态的加权和，加权平均的过程。得到的向量称为上下文向量
+        '''
         context = attention_weights.bmm(encoder_output) # [batch_size, 1, seq_len]*[batch_size,seq_len,hidden_dim]=[batch_size, 1, hidden_dim]
-        decoder_output_context = torch.cat([decoder_output, context], 2) # 连接context与decoder_output的hidden_dim =[batch_size, 2 * hidden_dim]
+        decoder_output_context = torch.cat([decoder_output, context], 2) # 连接context与decoder_output的hidden_dim =[batch_size, 1, 2 * hidden_dim]
+        decoder_output_context = torch.tanh(decoder_output_context) # 这里的decoder_output_context可再经过一层线性层再输入进tanh中
         prediction = self.fc_out(decoder_output_context.squeeze(1))
-        # prediction=[batch_size, output_dim]
+        # prediction=[batch_size, output_dim]，词汇表中所有词的概率分布，这里可以使用softmax进行归一化
         return prediction, hidden, attention_weights
 
 # 利用Encoder与Decoder构建seq2seq模型
