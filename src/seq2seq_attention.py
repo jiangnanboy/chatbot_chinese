@@ -51,7 +51,7 @@ class Encoder(nn.Module):
         output, _ = torch.nn.utils.rnn.pad_packed_sequence(output, batch_first=True) #这个会返回output以及压缩后的legnths
         return output, hidden
 
-# 构建attention计算方式
+# 构建attention权重计算方式
 class Attention(nn.Module):
     def __init__(self, method, hidden_dim):
         super(Attention, self).__init__()
@@ -119,10 +119,10 @@ class Decoder(nn.Module):
         decoder_output = [batch_size, 1, hidden_size]
         hidden = [batch_size, n_layers, hidden_size]
         '''
-        attention_weights = self.attention(decoder_output, encoder_output)#计算attention权重
+        attention_weights = self.attention(decoder_output, encoder_output)#利用encoder_output与decoder_output，计算attention权重
         # attention_weights=[batch_size, 1, seq_len]
         '''
-        以下是计算上下文：
+        以下是计算上下文：利用attention权重与encoder_output计算attention上下文向量
         注意力权重分布用于产生编码器隐藏状态的加权和，加权平均的过程。得到的向量称为上下文向量
         '''
         context = attention_weights.bmm(encoder_output) # [batch_size, 1, seq_len]*[batch_size,seq_len,hidden_dim]=[batch_size, 1, hidden_dim]
@@ -189,7 +189,7 @@ class Seq2Seq(nn.Module):
             encoder_output, hidden = self.encoder(
                 src, src_lens)  # hidden=[batch_size, n_layers*n_directions,hidden_size]; cell=[batch_size, n_layers*n_directions,hidden_size]
             # 输入到decoder的第一个是<sos>
-            input = trg[:, 0]
+            input = trg[:, 0] # [batch_size, 1]
             for t in range(1, trg_len):
                 '''
                 解码器输入token的embedding，为之前的hidden与cell状态
