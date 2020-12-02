@@ -104,11 +104,11 @@ class Decoder(nn.Module):
         self.dropout = nn.Dropout(dropout)
 
     def forward(self, input, hidden, encoder_output):
-        # input=[batch_size]
+        # input=[batch_size, 1]
         # hidden=[batch_size, n_layers*n_directions, hidden_size]
         # encoder_output=[batch_size,seq_len,hidden_dim*n_directions]
         input = input.unsqueeze(1)
-        # input=[batch_size, 1]
+        # input=[batch_size, 1, 1]
         embedded = self.dropout(self.embedding(input))
         # embedded=[batch_sze, 1, emb_dim]
         decoder_output, hidden = self.gru(embedded, hidden)

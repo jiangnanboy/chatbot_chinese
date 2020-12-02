@@ -22,12 +22,12 @@ Chinese chatbot for neural machine translation in PyTorch.
 ```
 resource/config.cfg
 ```
-- seq2seq
+- [seq2seq](https://github.com/jiangnanboy/chatbot_chinese/blob/master/src/seq2seq.py)
 ```
 python seq2seq.py -type train
 python seq2seq.py -type predict
 ```
-- seq2seq_attention
+- [seq2seq_attention](https://github.com/jiangnanboy/chatbot_chinese/blob/master/src/seq2seq_attention.py)
 ```
 python seq2seq_attention.py -type train
 python seq2seq_attention.py -type predict

@@ -61,11 +61,11 @@ class Decoder(nn.Module):
         self.dropout = nn.Dropout(dropout)
     
     def forward(self, input, hidden, cell):
-        #input=[batch_size]
+        #input=[batch_size, 1]
         #hidden=[batch_size, n_layers*n_directions, hidden_size]
         #cell=[batch_size, n_layers*n_directions, hidden_size]
         input = input.unsqueeze(1)
-        #input=[batch_size, 1]
+        #input=[batch_size, 1, 1]
         embedded = self.dropout(self.embedding(input))
         #embedded=[batch_sze, 1, emb_dim]
         output,(hidden,cell) = self.lstm(embedded, (hidden,cell))
@@ -138,7 +138,7 @@ class Seq2Seq(nn.Module):
             hidden, cell = self.encoder(
                 src)  # hidden=[batch_size, n_layers*n_directions,hidden_size]; cell=[batch_size, n_layers*n_directions,hidden_size]
             # 输入到decoder的第一个是<sos>
-            input = trg[:, 0]
+            input = trg[:, 0] # [batch_size, 1]
             for t in range(1, trg_len):
                 '''
                 解码器输入token的embedding，为之前的hidden与cell状态
