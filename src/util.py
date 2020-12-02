@@ -12,7 +12,7 @@ import torch.nn as nn
 4.构造迭代器Iterator：: 主要是数据输出的模型的迭代器。构造迭代器，支持batch定制用来分批次训练模型。
 '''
 
-def build_field_dataset_vocab(data_directory, src_name, trg_name, vocab):
+def build_field_dataset_vocab(data_directory, src_name, trg_name, vocab, oov=False):
 
     tokenize = lambda x: x.split()
 
@@ -34,6 +34,10 @@ def build_field_dataset_vocab(data_directory, src_name, trg_name, vocab):
     else:
         source.vocab = vocab
 
+    #获取训练集中的oov 词
+    if oov:
+        oov_words = get_oov_words(train_data, source.vocab.stoi)
+
     # 划分训练与验证集，一个问题，利用random_split进行数据集划分后，会丢失fields属性
     train_set, val_set = train_data.split(split_ratio=0.95, random_state=random.seed(1))
 
@@ -45,10 +49,27 @@ def build_field_dataset_vocab(data_directory, src_name, trg_name, vocab):
         # shuffle=True,
         # device=device,
         sort_within_batch=True, #为true则一个batch内的数据会按sort_key规则降序排序
-        sort_key=lambda x: len(x.src)
+        sort_key=lambda x: len(x.src) #这里按src的长度降序排序，主要是为后面pack,pad操作
         # repeat=False
     )
-    return source, train_iterator, val_iterator
+    if oov:
+        return source, train_iterator, val_iterator, oov_words
+    else:
+        return source, train_iterator, val_iterator
+
+
+def get_oov_words(data, word_to_index):
+    # 保存oov单词
+    oov_word = []
+    for i in range(len(data.examples)):
+        src_trg_dict = vars(data.examples[i])
+        for w in src_trg_dict['src']:
+            if (w not in word_to_index.keys()) and (w not in oov_word):
+                oov_word.append(w)
+        for w in src_trg_dict['trg']:
+            if (w not in word_to_index.keys()) and (w not in oov_word):
+                oov_word.append(w)
+    return oov_word
 
 #计算model中可训练的参数个数
 def count_parameters(model):
