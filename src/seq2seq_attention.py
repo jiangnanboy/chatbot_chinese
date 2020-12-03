@@ -26,12 +26,13 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 # 构建编码器
 class Encoder(nn.Module):
-    def __init__(self, input_dim, emb_dim, hidden_dim, n_layers, dropout):
+    def __init__(self, input_dim, emb_dim, hidden_dim, n_layers, dropout, pad_index):
         super(Encoder, self).__init__()
         self.hidden_dim = hidden_dim
         self.n_layers = n_layers
+        self.pad_index = pad_index
 
-        self.embedding = nn.Embedding(input_dim, emb_dim)
+        self.embedding = nn.Embedding(input_dim, emb_dim, padding_idx=pad_index)
         self.gru = nn.GRU(emb_dim, hidden_dim, n_layers, dropout=dropout, batch_first=True)
         self.dropout = nn.Dropout(dropout)
 
@@ -48,7 +49,7 @@ class Encoder(nn.Module):
         output, hidden = self.gru(packed)
         # output=[batch_size, seq_len, hidden_size*n_directions]
         # hidden=[batch_size, n_layers*n_directions,hidden_size]
-        output, _ = torch.nn.utils.rnn.pad_packed_sequence(output, batch_first=True) #这个会返回output以及压缩后的legnths
+        output, _ = torch.nn.utils.rnn.pad_packed_sequence(output, batch_first=True, padding_value=self.pad_index, total_length=len(src[0])) #这个会返回output以及压缩后的legnths
         return output, hidden
 
 # 构建attention权重计算方式
@@ -221,7 +222,7 @@ def build_model(source, encoder_embedding_dim, decoder_embedding_dim, hidden_dim
     '''
     input_dim = output_dim = len(source.vocab)
 
-    encoder = Encoder(input_dim, encoder_embedding_dim, hidden_dim, n_layers, encoder_dropout)
+    encoder = Encoder(input_dim, encoder_embedding_dim, hidden_dim, n_layers, encoder_dropout, source.vocab.stoi[source.pad_token])
     decoder = Decoder(output_dim, decoder_embedding_dim, hidden_dim, n_layers, decoder_dropout)
 
     model = Seq2Seq(False, encoder, decoder).to(device)
