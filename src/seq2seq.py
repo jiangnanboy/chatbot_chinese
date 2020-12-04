@@ -29,6 +29,7 @@ class Encoder(nn.Module):
         self.hidden_dim = hidden_dim
         self.n_layers = n_layers
         self.embedding = nn.Embedding(input_dim, emb_dim)
+        #这里batch_first=True，只影响输入和输出。hidden与cell还是batch在第2维
         self.lstm = nn.LSTM(emb_dim, hidden_dim, n_layers, dropout=dropout, batch_first=True)
         self.dropout = nn.Dropout(dropout)
         
@@ -44,8 +45,8 @@ class Encoder(nn.Module):
         #output,(hidden,cell) = self.lstm(embedded, (h0,c0))
         output,(hidden,cell) = self.lstm(embedded)
         #output=[batch_size, seq_len, hidden_size*n_directions]
-        #hidden=[batch_size, n_layers*n_directions,hidden_size]
-        #cell=[batch_size, n_layers*n_directions,hidden_size]
+        #hidden=[n_layers*n_directions, batch_size, hidden_size]
+        #cell=[n_layers*n_directions, batch_size, hidden_size]
         return hidden, cell
 
 #构建解码器
@@ -56,27 +57,28 @@ class Decoder(nn.Module):
         self.hidden_dim = hidden_dim
         self.n_layers = n_layers
         self.embedding = nn.Embedding(output_dim, emb_dim)
+        # 这里batch_first=True，只影响输入和输出。hidden与cell还是batch在第2维
         self.lstm = nn.LSTM(emb_dim, hidden_dim, n_layers, dropout=dropout, batch_first=True)
         self.fc_out = nn.Linear(hidden_dim, output_dim)
         self.dropout = nn.Dropout(dropout)
     
     def forward(self, input, hidden, cell):
         #input=[batch_size, 1]
-        #hidden=[batch_size, n_layers*n_directions, hidden_size]
-        #cell=[batch_size, n_layers*n_directions, hidden_size]
+        #hidden=[n_layers*n_directions, batch_size, hidden_size]
+        #cell=[n_layers*n_directions, batch_size, hidden_size]
         input = input.unsqueeze(1)
         #input=[batch_size, 1, 1]
         embedded = self.dropout(self.embedding(input))
         #embedded=[batch_sze, 1, emb_dim]
         output,(hidden,cell) = self.lstm(embedded, (hidden,cell))
         #output=[batch_size, 1, hidden_size*n_directions]
-        #hidden=[batch_size, n_layers*n_directions,hidden_size]
-        #cell=[batch_size, n_layers*n_directions,hidden_size]
+        #hidden=[n_layers*n_directions, batch_size, hidden_size]
+        #cell=[n_layers*n_directions, batch_size, hidden_size]
         '''
         seq_len在decoder阶段是1，如果单向则n_directions=1因此：
         output = [batch_size, 1, hidden_size]
-        hidden = [batch_size, n_layers, hidden_size]
-        cell = [batch_size, n_layers, hidden_size]
+        hidden = [n_layers, batch_size, hidden_size]
+        cell = [n_layers, batch_size, hidden_size]
         '''
         prediction = self.fc_out(output.squeeze(1))
         #prediction=[batch_size, output_dim]
@@ -136,13 +138,13 @@ class Seq2Seq(nn.Module):
             outputs = torch.zeros(batch_size, trg_len, trg_vocab_size).to(device)
             # encoder的最后一层hidden state作为decoder的初始隐状态
             hidden, cell = self.encoder(
-                src)  # hidden=[batch_size, n_layers*n_directions,hidden_size]; cell=[batch_size, n_layers*n_directions,hidden_size]
+                src)  # hidden=[n_layers*n_directions, batch_size, hidden_size]; cell=[n_layers*n_directions, batch_size, hidden_size]
             # 输入到decoder的第一个是<sos>
             input = trg[:, 0] # [batch_size, 1]
             for t in range(1, trg_len):
                 '''
-                解码器输入token的embedding，为之前的hidden与cell状态
-                接收输出即predictions和新的hidden与cell状态
+                解码器输入的为上一步的hidden与cell状态，初始输出状态为encoder的最后一步的hidden与cell
+                输出预测predictions和新的hidden与cell状态
                 '''
                 output, hidden, cell = self.decoder(input, hidden, cell)
                 # 存入decoder的预测值

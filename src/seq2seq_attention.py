@@ -23,7 +23,9 @@ from util import build_field_dataset_vocab, save_vocab, load_vocab, init_weights
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-
+'''
+以下注意这个模型中encoder与decoder都使用n_layers=2所以在计算attention时，拿到上一步hidden的最后一层是hidden[-1,:,:]
+'''
 # 构建编码器
 class Encoder(nn.Module):
     def __init__(self, input_dim, emb_dim, hidden_dim, n_layers, dropout, pad_index):
@@ -45,10 +47,10 @@ class Encoder(nn.Module):
         # src=[batch_size, seq_len]
         embedded = self.dropout(self.embedding(src))
         # embedd=[batch_size,seq_len,embdim]
-        packed = torch.nn.utils.rnn.pack_padded_sequence(embedded, src_len, batch_first=True)
+        packed = torch.nn.utils.rnn.pack_padded_sequence(embedded, src_len, batch_first=True, enforce_sorted=True) #这里enfore_sotred=True要求数据根据词数排序
         output, hidden = self.gru(packed)
         # output=[batch_size, seq_len, hidden_size*n_directions]
-        # hidden=[batch_size, n_layers*n_directions,hidden_size]
+        # hidden=[n_layers*n_directions, batch_size, hidden_size]
         output, _ = torch.nn.utils.rnn.pad_packed_sequence(output, batch_first=True, padding_value=self.pad_index, total_length=len(src[0])) #这个会返回output以及压缩后的legnths
         return output, hidden
 
@@ -79,15 +81,16 @@ class Attention(nn.Module):
         #energy=[batch_size, seq_len, hidden_dim]
         return torch.sum(self.v * energy, dim=2) #[batch_size, seq_len]
 
-    def forward(self, decoder_output, encoder_output):
-        #decoder_output=[batch_size, 1, n_directions*hidden_dim]
-        #encoder_output=[batch_size, seq_len, hidden_dim*n_ndirections]
+    def forward(self, hidden, encoder_output):
+        # hidden = [batch_size, hidden_size]
+        # #encoder_output=[batch_size, seq_len, hidden_dim*n_ndirections]
+        hidden = hidden.unsqueeze(1) # [batch_size, 1, hidden_size]
         if self.method == 'general':
-            attn_energies = self.general_score(decoder_output, encoder_output)
+            attn_energies = self.general_score(hidden, encoder_output)
         elif self.method == 'concat':
-            attn_energies = self.concat_score(decoder_output, encoder_output)
+            attn_energies = self.concat_score(hidden, encoder_output)
         elif self.method == 'dot':
-            attn_energies = self.dot_score(decoder_output, encoder_output)
+            attn_energies = self.dot_score(hidden, encoder_output)
         return F.softmax(attn_energies, dim=1).unsqueeze(1) #softmax归一化，[batch_size, 1, seq_len]
 
 # 构建解码器
@@ -99,34 +102,41 @@ class Decoder(nn.Module):
         self.n_layers = n_layers
 
         self.embedding = nn.Embedding(output_dim, emb_dim)
-        self.gru = nn.GRU(emb_dim, hidden_dim, n_layers, dropout=dropout, batch_first=True)
+        self.gru = nn.GRU(hidden_dim + emb_dim, hidden_dim, n_layers, dropout=dropout, batch_first=True)
         self.fc_out = nn.Linear(hidden_dim * 2, output_dim)
         self.attention = Attention(attention_method, hidden_dim)
         self.dropout = nn.Dropout(dropout)
 
     def forward(self, input, hidden, encoder_output):
         # input=[batch_size, 1]
-        # hidden=[batch_size, n_layers*n_directions, hidden_size]
-        # encoder_output=[batch_size,seq_len,hidden_dim*n_directions]
-        input = input.unsqueeze(1)
+        # hidden=[n_layers*n_directions, batch_size, hidden_size] 初始化为encoder的最后一层 [1, batch_size, hidden_size]
+        # encoder_output=[batch_size, seq_len, hidden_dim*n_directions]
+
         # input=[batch_size, 1, 1]
-        embedded = self.dropout(self.embedding(input))
+        input = input.unsqueeze(1)
+
         # embedded=[batch_sze, 1, emb_dim]
-        decoder_output, hidden = self.gru(embedded, hidden)
-        # decoder_output=[batch_size, 1, hidden_size*n_directions]
-        # hidden=[batch_size, n_layers*n_directions,hidden_size]
-        '''
-        seq_len在decoder阶段是1，如果单向则n_directions=1因此：
-        decoder_output = [batch_size, 1, hidden_size]
-        hidden = [batch_size, n_layers, hidden_size]
-        '''
-        attention_weights = self.attention(decoder_output, encoder_output)#利用encoder_output与decoder_output，计算attention权重
+        embedded = self.dropout(self.embedding(input))
+
+        # 利用利用上一步的hidden与encoder_output，计算attention权重
         # attention_weights=[batch_size, 1, seq_len]
+        attention_weights = self.attention(hidden[-1, :, :], encoder_output) # hidden[-1, :, :] 拿到hidden最后一层 -> [batch_size, hidden_size]
+
         '''
         以下是计算上下文：利用attention权重与encoder_output计算attention上下文向量
         注意力权重分布用于产生编码器隐藏状态的加权和，加权平均的过程。得到的向量称为上下文向量
         '''
         context = attention_weights.bmm(encoder_output) # [batch_size, 1, seq_len]*[batch_size,seq_len,hidden_dim]=[batch_size, 1, hidden_dim]
+
+        #拼接注意力上下文和embedding向量作为gru输入
+        # [batch_size, 1, hidden_dim+emb_dim]
+        gru_input = torch.cat([context, embedded], 2)
+
+        # decoder_output=[batch_size, 1, hidden_size*n_directions]
+        # hidden=[n_layers*n_directions, batch_size, hidden_size]
+        decoder_output, hidden = self.gru(gru_input, hidden)
+
+
         decoder_output_context = torch.cat([decoder_output, context], 2) # 连接context与decoder_output的hidden_dim =[batch_size, 1, 2 * hidden_dim]
         decoder_output_context = torch.tanh(decoder_output_context) # 这里的decoder_output_context可再经过一层线性层再输入进tanh中
         prediction = self.fc_out(decoder_output_context.squeeze(1))
@@ -188,13 +198,13 @@ class Seq2Seq(nn.Module):
             outputs = torch.zeros(batch_size, trg_len, trg_vocab_size).to(device)
             # encoder的最后一层hidden state作为decoder的初始隐状态
             encoder_output, hidden = self.encoder(
-                src, src_lens)  # hidden=[batch_size, n_layers*n_directions,hidden_size]; cell=[batch_size, n_layers*n_directions,hidden_size]
+                src, src_lens)  # hidden=[n_layers*n_directions, batch_size, hidden_size]
             # 输入到decoder的第一个是<sos>
             input = trg[:, 0] # [batch_size, 1]
             for t in range(1, trg_len):
                 '''
-                解码器输入token的embedding，为之前的hidden与cell状态
-                接收输出即predictions和新的hidden与cell状态
+                解码器输入的初始hidden为encoder的最后一步的hidden
+                接收输出即predictions和新的hidden状态
                 '''
                 output, hidden, attention_weights = self.decoder(input, hidden, encoder_output)
                 # 存入decoder的预测值
