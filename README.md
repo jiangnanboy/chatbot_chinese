@@ -17,6 +17,11 @@ Chinese chatbot for neural machine translation in PyTorch.
 * Encoder: GRU (packed padded sequences)
 * Decoder: GRU
 
+### 3.seq2seq_attention with pointer generator
+* [Get To The Point: Summarization with Pointer-Generator Networks](https://arxiv.org/abs/1704.04368)
+* Encoder: GRU (packed padded sequences)
+* Decoder: GRU (pointer network and coverage)
+
 ## Use
 - parameters setting
 ```
@@ -32,7 +37,11 @@ python seq2seq.py -type predict
 python seq2seq_attention.py -type train
 python seq2seq_attention.py -type predict
 ```
-
+- [seq2seq_attention_with_pointer_network](https://github.com/jiangnanboy/chatbot_chinese/blob/master/src/pointer_generator/seq2seq_pointernet.py)
+```
+python seq2seq_pointernet.py -type train
+python seq2seq_pointernet.py -type predict
+```
 
 ## Requirements
 
@@ -49,3 +58,5 @@ Based on the following implementations
 * http://pytorch.org/tutorials/intermediate/seq2seq_translation_tutorial.html
 * https://github.com/bentrevett
 * https://gitee.com/dogecheng/python/blob/master/pytorch/Seq2SeqForTranslation.ipynb
+* https://github.com/atulkum/pointer_summarizer/blob/master/training_ptr_gen/train.py
+* https://github.com/abisee/pointer-generator
