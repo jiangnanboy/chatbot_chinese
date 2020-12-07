@@ -20,7 +20,6 @@ from util import save_vocab, load_vocab, init_weights, epoch_time
 
 from pointer_generator.pointer_genearator_dataset import get_dataset, build_field_dataset_vocab, get_dataset_to_model
 
-
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 # https://zhuanlan.zhihu.com/p/265319703
@@ -47,7 +46,7 @@ class Encoder(nn.Module):
         #以下三行为计算batch中src的长度，不包括pad(之前pad的索引映射为1，这里是去除pad后的词数)
         exist = (src != 1) * 1.0
         factor = np.ones(src.shape[1])
-        src_len = np.dot(exist, factor)
+        src_len = np.dot(exist.cpu(), factor) #这里从cuda转为cpu
         src_len = torch.from_numpy(src_len)
         src_len = src_len.long()
 
@@ -67,8 +66,8 @@ class Attention(nn.Module):
         # et(energy函数)的计算经过4层线性变换
         self.w_h = nn.Linear(hidden_dim, hidden_dim) #对encoder_output进行线性变换
         self.w_s = nn.Linear(hidden_dim, hidden_dim) #对deocder_output进行线性变换
-        self.w_c = nn.Linear(1, hidden_dim*2) #对之前所有注意力权重之和coverage进行线性变换
-        self.v = nn.Linear(hidden_dim*2, 1) #这是最后一层线性变换(在这之前又经过tahn变换)
+        self.w_c = nn.Linear(1, hidden_dim) #对之前所有注意力权重之和coverage进行线性变换
+        self.v = nn.Linear(hidden_dim, 1) #这是最后一层线性变换(在这之前又经过tahn变换)
 
     # encoder_output ：来自encoder的output => [batch_size, seq_len, n_directions * hidden_size]
     # decoder_hidden : 来自decoder的hidden => [batch_size, n_directions*hidden_dim]
@@ -81,16 +80,16 @@ class Attention(nn.Module):
         decoder_feature = self.w_s(decoder_hidden).unsqueeze(1) # (batch_size, 1, hidden_dim)
 
         # broadcast 广播运算
-        attention_feature = encoder_feature + decoder_feature  # (batch,seq_len,hidden*2)
+        attention_feature = encoder_feature + decoder_feature  # (batch,seq_len,hidden)
 
         #对之前所有注意力权重之和coverage进行线性变换
-        coverage_feature = self.w_c(coverage.unsqueeze(2))  # [batch_size, seq_len, 1]  - > (batch, seq_len,hidden*2)
+        coverage_feature = self.w_c(coverage.unsqueeze(2))  # [batch_size, seq_len, 1]  - > (batch, seq_len,hidden)
 
         #energy的计算中加入coverage机制，缓解生成重复词问题
         attention_feature += coverage_feature
 
         #energy的计算
-        e_t = self.v(torch.tanh(attention_feature)).squeeze(dim = 2)  # [batch_size, seq_len, hidden*2] -> (batch_size, seq_len, 1) -> (batch_size, seq_len)
+        e_t = self.v(torch.tanh(attention_feature)).squeeze(dim = 2)  # [batch_size, seq_len, hidden] -> (batch_size, seq_len, 1) -> (batch_size, seq_len)
 
         # 经过softmax归一化后的attention权重 -> (batch_size, seq_len)
         a_t = torch.softmax(e_t,dim=-1)
@@ -183,16 +182,17 @@ class Decoder(nn.Module):
         注意力权重分布用于产生编码器隐藏状态的加权和，加权平均的过程。得到的向量称为上下文向量
         '''
         # [batch_size, 1, seq_len] * [batch_size, seq_len, n_directions*hidden_size] = [batch_size, 1, n_directions*hidden_size]
-        context = torch.bmm(attention_weight.unsqueeze(1), encoder_output).squeeze() # [batch_size, n_directions*hidden_size]
-
-        #计算生成概率Pgen
-        Pgen = self.pgen(context, hidden[-1, :, :], gru_input.squeeze())
+        context = torch.bmm(attention_weight.unsqueeze(1), encoder_output)
 
         # 拼接注意力上下文context与decoder_output的hidden_dim =[batch_size, 1, 2 * hidden_dim]
         decoder_output_context = torch.cat([decoder_output, context], 2)
 
+        context = context.squeeze() # [batch_size, n_directions*hidden_size]
+        #计算生成概率Pgen -> [batch_size, 1]
+        Pgen = self.pgen(context, hidden[-1, :, :], gru_input.squeeze())
+
         # 计算Pvocab的词典生成概率 -> (batch,vob_size)
-        pvocab = self.fc_out(decoder_output_context)
+        pvocab = self.fc_out(decoder_output_context.squeeze(1))
         pvocab = torch.softmax(pvocab, dim = -1)
         pvocab = pvocab * Pgen
 
@@ -208,7 +208,7 @@ class Decoder(nn.Module):
             final_word_p = pvocab
 
         '''
-        final_dist = [batch_size, vob_size + 这个batch中oov词数最大的那行] 最终的预测概率包括词典中的词分布与input时的oov词分布
+        final_word_p = [batch_size, vob_size + 这个batch中oov词数最大的那行] 最终的预测概率包括词典中的词分布与input时的oov词分布
         hidden = [n_layers*n_directions, batch_size, hidden_size] 经过lstm的hidden与cell状态
         context = [batch_size, n_directions*hidden_size] 这一步的上下文
         attention_weight = [batch_size, seq_len] 注意力权重
@@ -297,18 +297,19 @@ class Seq2Seq(nn.Module):
                 '''
                 final_word_p, hidden, context_vec, attention_weight, sum_coverage = self.decoder(target, hidden, encoder_output, context_vec, oov_zeros, src_with_oov, coverage)
 
-                # target_oov = [batch_size, 1, 1], 带oov索引的目标target
+                # target_oov = [batch_size, 1], 带oov索引的目标target
                 target_oov = trg_with_oov[:, t].unsqueeze(1)
 
+
                 # 获得这个词分布下，目标词的概率,利用index来索引input特定位置的数值,dim=-1按行操作
-                # [batch_size, 1, 1] -> [batch_size]
+                # [batch_size, 1] -> [batch_size]
                 probs = torch.gather(input=final_word_p, dim=-1, index=target_oov).squeeze()
 
                 # 计算概率 -log(P)
                 step_loss = -torch.log(probs + self.eps)
 
-                # coverage loss
-                coverage_loss = self.coverage_loss_lambda * torch.sum(torch.min(attention_weight, coverage), dim = -1)
+                # coverage loss，以下将attention_weight与coverage从float32转为float16，不转会出错。
+                coverage_loss = self.coverage_loss_lambda * torch.sum(torch.min(attention_weight.to(torch.float16), coverage.to(torch.float16)), dim = -1)
 
                 #最终的损失
                 step_loss += coverage_loss
@@ -367,6 +368,7 @@ def train(model, iterator, hidden_dim, optimizer, clip):
         8.损失值求和(返回所有batch的损失的均值)
     '''
     model.train()
+
     epoch_loss = 0
 
     for i, batch in enumerate(iterator):
@@ -375,6 +377,7 @@ def train(model, iterator, hidden_dim, optimizer, clip):
 
         with amp.scale_loss(loss, optimizer) as scaled_loss:
             scaled_loss.backward()
+
         torch.nn.utils.clip_grad_norm_(model.parameters(), clip)
         optimizer.step()
         optimizer.zero_grad()
@@ -462,11 +465,12 @@ def predict(sentence, vocab, model, hidden_dim):
         prediction = [index_to_word[t] for t in prediction]
         return prediction
 
-
+'''
 if __name__ == '__main__':
     parent_directory = os.path.dirname(os.path.abspath(".."))
 
     # 加载配置文件
+    
     config = ConfigParser()
     config.read(os.path.join(parent_directory, 'resource') + '/config.cfg')
     section = config.sections()[0]
@@ -474,6 +478,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='seq2seq_attention_chatbot')
     parser.add_argument('-type', default='train', help='train or predict with seq2seq!', type=str)
     args = parser.parse_args()
+
     if args.type == 'train':
         data_directory = os.path.join(parent_directory, 'data') + '\\'
 
@@ -526,6 +531,105 @@ if __name__ == '__main__':
         decoder = Decoder(output_dim, config.getint(section, 'decoder_embedding_dim'), config.getint(section, 'hidden_dim'), config.getint(section, 'n_layers'), config.getfloat(section, 'decoder_dropout'))
         model = Seq2Seq(True, encoder, decoder)
         model.load_state_dict(torch.load(config.get(section, 'seq2seq_pointer_attention_model')))
+        model.eval()
+        while True:
+            sentence = input('you:')
+            if sentence == 'exit':
+                break
+            prediction = predict(sentence, vocab, model)
+            print('bot:{}'.format(''.join(prediction)))
+            
+'''
+
+# 测试
+if __name__ == '__main__':
+    parent_directory = os.path.dirname(os.path.abspath(".."))
+
+    chat_source = 'E:\project\pycharm workspace\chatbot_chinese\data\chat_source.src'
+    chat_target = 'E:\project\pycharm workspace\chatbot_chinese\data\chat_target.trg'
+
+    chat_source_name = 'chat_source.src'
+    chat_target_name = 'chat_target.trg'
+
+    vocab_file = 'E:\project\pycharm workspace\chatbot_chinese\\vocab\\vocab.pk'
+
+    seq2seq_pointer_attention_model = 'E:\project\pycharm workspace\chatbot_chinese\model\seq2seq - pointer - attention - model.pt'
+
+    batch_size = 256
+    max_length = 50
+    encoder_embedding_dim = 128
+    decoder_embedding_dim = 128
+    hidden_dim = 256
+    n_layers = 2
+    encoder_dropout = 0.5
+    decoder_dropout = 0.5
+    lr = 0.01
+    weight_decay = 0.01
+    gamma = 0.1
+    n_epochs = 10
+    clip = 1
+    teacher_forcing_ration = 1
+    coverage_loss_lambda = 1.0
+    eps = 0.0000001
+
+    type = 'train'
+
+    if type == 'train':
+        data_directory = os.path.join(parent_directory, 'data') + '\\'
+
+        # 如果词典存在，则加载
+        vocab = None
+        if os.path.exists(vocab_file):
+            vocab = load_vocab(vocab_file)
+
+        # 加载训练数据
+        source, train_data = build_field_dataset_vocab(data_directory,
+                                                       chat_source_name,
+                                                       chat_target_name,
+                                                       vocab)
+
+        train_iterator, val_iterator = get_dataset(source, train_data, batch_size)
+
+        # 保存source的词典
+        if vocab is None:
+            save_vocab(source.vocab, vocab_file)
+
+        model, optimizer, scheduler = build_model(source,
+                                                  encoder_embedding_dim,
+                                                  decoder_embedding_dim,
+                                                  hidden_dim,
+                                                  n_layers,
+                                                  encoder_dropout,
+                                                  decoder_dropout,
+                                                  lr,
+                                                  gamma,
+                                                  weight_decay,
+                                                  eps,
+                                                  coverage_loss_lambda)
+
+        model, optimizer = amp.initialize(model, optimizer, opt_level='O1')
+
+        train_model(model,
+                    train_iterator,
+                    val_iterator,
+                    hidden_dim,
+                    optimizer,
+                    scheduler,
+                    n_epochs,
+                    clip,
+                    seq2seq_pointer_attention_model)
+
+    elif type == 'predict':
+        vocab = load_vocab(vocab_file)
+        input_dim = output_dim = len(vocab)
+        encoder = Encoder(input_dim, encoder_embedding_dim,
+                          hidden_dim, n_layers,
+                          encoder_dropout)
+        decoder = Decoder(output_dim, decoder_embedding_dim,
+                          hidden_dim, n_layers,
+                          decoder_dropout)
+        model = Seq2Seq(True, encoder, decoder)
+        model.load_state_dict(torch.load(seq2seq_pointer_attention_model))
         model.eval()
         while True:
             sentence = input('you:')
