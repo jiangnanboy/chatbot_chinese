@@ -27,6 +27,19 @@ Chinese chatbot for neural machine translation in PyTorch.
 ```
 resource/config.cfg
 ```
+- train data
+```
+data/chat_source.src
+data/chat_source.trg
+```
+- model save path
+```
+model/
+```
+- vocabulary dictionary
+```
+vocab/vocab.pk
+```
 - [seq2seq](https://github.com/jiangnanboy/chatbot_chinese/blob/master/src/seq2seq.py)
 ```
 python seq2seq.py -type train
