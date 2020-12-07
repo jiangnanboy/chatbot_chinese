@@ -262,11 +262,13 @@ class Seq2Seq(nn.Module):
             # encoder的最后一层hidden state作为decoder的初始隐状态
             encoder_output, hidden = self.encoder(src)  # hidden=[n_layers*n_directions, batch_size, hidden_size]
 
+
             output_tokens = []
 
             input = torch.tensor(2).unsqueeze(0)  # 预测阶段解码器输入第一个token-> <sos>
             while True:
                 final_word_p, hidden, context_vec, attention_weight, sum_coverage = self.decoder(input, hidden, encoder_output, context_vec, oov_zeros, src_with_oov, coverage)
+                context_vec = context_vec.unsqueeze(0)
                 input = final_word_p.argmax(1)
                 output_token = input.squeeze().detach().item()
                 if output_token == 3 or len(output_tokens) == max_len:  # 输出最终结果是<eos>或达到最大长度则终止
@@ -448,8 +450,8 @@ def predict(sentence, vocab, model, hidden_dim):
             oov_zeros = torch.zeros((1, len(oovs)), dtype=torch.float32)
         init_coverage = torch.zeros((1, len(input_indexed)), dtype=torch.float32)
         # 注意力上下文
-        init_context_vec = torch.zeros((1, hidden_dim), dtype=torch.float32)
-
+        init_context_vec = torch.zeros(hidden_dim, dtype=torch.float32)
+        init_context_vec = init_context_vec.unsqueeze(0)
         encoder_input = torch.LongTensor(input_indexed)  # convert to tensor
         encoder_input = encoder_input.unsqueeze(0)  # reshape in form of batch,no. of words
 
@@ -457,11 +459,12 @@ def predict(sentence, vocab, model, hidden_dim):
         encoder_input_with_oov = encoder_input_with_oov.unsqueeze(0)
 
         prediction = model(src=encoder_input, src_with_oov=encoder_input_with_oov, trg=None, trg_with_oov=None, oov_zeros=oov_zeros, context_vec=init_context_vec, coverage=init_coverage)  # prediction
-        prediction = [vocab.itos[t] for t in prediction]
+
         index_to_word = vocab.itos
         # 将oov词放到index_to_word词典中
         for word in oovs:
             index_to_word[len(index_to_word) + oovs.index(word)] = word
+
         prediction = [index_to_word[t] for t in prediction]
         return prediction
 
@@ -572,7 +575,7 @@ if __name__ == '__main__':
     coverage_loss_lambda = 1.0
     eps = 0.0000001
 
-    type = 'train'
+    type = 'predict'
 
     if type == 'train':
         data_directory = os.path.join(parent_directory, 'data') + '\\'
@@ -622,18 +625,16 @@ if __name__ == '__main__':
     elif type == 'predict':
         vocab = load_vocab(vocab_file)
         input_dim = output_dim = len(vocab)
-        encoder = Encoder(input_dim, encoder_embedding_dim,
-                          hidden_dim, n_layers,
-                          encoder_dropout)
-        decoder = Decoder(output_dim, decoder_embedding_dim,
-                          hidden_dim, n_layers,
-                          decoder_dropout)
-        model = Seq2Seq(True, encoder, decoder)
+        encoder = Encoder(input_dim, encoder_embedding_dim, hidden_dim, n_layers, encoder_dropout,
+                          vocab['<pad>'])
+        decoder = Decoder(output_dim, decoder_embedding_dim, hidden_dim, n_layers, decoder_dropout,
+                          vocab['<pad>'])
+        model = Seq2Seq(True, encoder, decoder, eps, coverage_loss_lambda)
         model.load_state_dict(torch.load(seq2seq_pointer_attention_model))
         model.eval()
         while True:
             sentence = input('you:')
             if sentence == 'exit':
                 break
-            prediction = predict(sentence, vocab, model)
+            prediction = predict(sentence, vocab, model, hidden_dim)
             print('bot:{}'.format(''.join(prediction)))
