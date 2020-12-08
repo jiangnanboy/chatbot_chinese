@@ -22,6 +22,11 @@ Chinese chatbot for neural machine translation in PyTorch.
 * Encoder: GRU (packed padded sequences)
 * Decoder: GRU (pointer network and coverage)
 
+### 4.seq2seq with Convolutional Neural Network
+* [Convolutional Sequence to Sequence Learning](https://arxiv.org/abs/1705.03122)
+* cnn
+* cnn
+
 ## Use
 - parameters setting
 ```
@@ -54,6 +59,11 @@ python seq2seq_attention.py -type predict
 ```
 python seq2seq_pointernet.py -type train
 python seq2seq_pointernet.py -type predict
+```
+- [seq2seq_cnn](https://github.com/jiangnanboy/chatbot_chinese/blob/master/src/seq2seq_convolution.py)
+```
+python seq2seq_convolution.py -type train
+python seq2seq_convolution.py -type predict
 ```
 
 ## Requirements

@@ -12,7 +12,7 @@ import torch.nn as nn
 4.构造迭代器Iterator：: 主要是数据输出的模型的迭代器。构造迭代器，支持batch定制用来分批次训练模型。
 '''
 
-def build_field_dataset_vocab(data_directory, src_name, trg_name, vocab, oov=False):
+def build_field_dataset_vocab(data_directory, src_name, trg_name, vocab, field_include_length=True, oov=False):
 
     tokenize = lambda x: x.split()
 
@@ -22,7 +22,7 @@ def build_field_dataset_vocab(data_directory, src_name, trg_name, vocab, oov=Fal
                         init_token='<sos>', eos_token='<eos>',
                         pad_token='<pad>', unk_token='<unk>',
                         batch_first=True, fix_length=50,
-                        include_lengths=True) #include_lengths=True为方便之后使用torch的pack_padded_sequence
+                        include_lengths=field_include_length) #include_lengths=True为方便之后使用torch的pack_padded_sequence
 
     # 定义数据集
     train_data = datasets.TranslationDataset(path=data_directory,
@@ -30,7 +30,7 @@ def build_field_dataset_vocab(data_directory, src_name, trg_name, vocab, oov=Fal
                                              fields=(source, source))  # source与target共用vocab可使用同一个Fields
     # 创建词汇表
     if vocab is None:
-        source.build_vocab(train_data, min_freq=2)
+        source.build_vocab(train_data, min_freq=2) # 词频少于2的将被映射为<unk>
     else:
         source.vocab = vocab
 
