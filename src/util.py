@@ -57,7 +57,7 @@ def build_field_dataset_vocab(data_directory, src_name, trg_name, vocab, field_i
     else:
         return source, train_iterator, val_iterator
 
-
+# 获取训练数据中的oov词
 def get_oov_words(data, word_to_index):
     # 保存oov单词
     oov_word = []
