@@ -11,21 +11,28 @@ Chinese chatbot for neural machine translation in PyTorch.
 * [Sequence to Sequence Learning with Neural Networks](https://arxiv.org/abs/1409.3215)
 * Encoder: LSTM
 * Decoder: LSTM
+* ![image](https://raw.githubusercontent.com/jiangnanboy/chatbot_chinese/master/img/seq2seq1.png)
+* ![image](https://raw.githubusercontent.com/jiangnanboy/chatbot_chinese/master/img/seq2seq2.png)
 
 ### 2.seq2seq_attention
 * [Neural Machine Translation by Jointly Learning to Align and Translate](https://arxiv.org/abs/1409.0473)
 * Encoder: GRU (packed padded sequences)
 * Decoder: GRU
+* ![image](https://raw.githubusercontent.com/jiangnanboy/chatbot_chinese/master/img/seq2seq_attention1.png)
+* ![image](https://raw.githubusercontent.com/jiangnanboy/chatbot_chinese/master/img/seq2seq_attention2.png)
 
 ### 3.seq2seq_attention with pointer generator
 * [Get To The Point: Summarization with Pointer-Generator Networks](https://arxiv.org/abs/1704.04368)
 * Encoder: GRU (packed padded sequences)
 * Decoder: GRU (pointer network and coverage)
+* ![image](https://raw.githubusercontent.com/jiangnanboy/chatbot_chinese/master/img/seq2seq_pointernet1.png)
 
 ### 4.seq2seq with Convolutional Neural Network
 * [Convolutional Sequence to Sequence Learning](https://arxiv.org/abs/1705.03122)
 * cnn
 * cnn
+* ![image](https://raw.githubusercontent.com/jiangnanboy/chatbot_chinese/master/img/seq2seq_convolution1.png)
+* ![image](https://raw.githubusercontent.com/jiangnanboy/chatbot_chinese/master/img/seq2seq_convolution2.png)
 
 ## Use
 - parameters setting
