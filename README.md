@@ -73,6 +73,27 @@ python seq2seq_convolution.py -type train
 python seq2seq_convolution.py -type predict
 ```
 
+## Note
+
+使用Apex导致的问题：
+```
+Loss整体变大，而且很不稳定。效果变差。会遇到梯度溢出。
+Gradient overflow.  Skipping step, loss scaler 0 reducing loss scale to 32768.0
+Gradient overflow.  Skipping step, loss scaler 0 reducing loss scale to 16384.0
+Gradient overflow.  Skipping step, loss scaler 0 reducing loss scale to 8192.0
+Gradient overflow.  Skipping step, loss scaler 0 reducing loss scale to 4096.0
+Gradient overflow.  Skipping step, loss scaler 0 reducing loss scale to 2048.0
+...
+ZeroDivisionError: float division by zero
+
+解决办法如下来防止出现梯度溢出：
+
+1、O2换成O1，再不行换成O0
+2、把batchsize从32调整为16会显著解决这个问题，另外在换成O0(欧0)的时候会出现内存不足的情况，减小batchsize也是有帮助的
+3、减少学习率
+4、增加Relu会有效保存梯度，防止梯度消失
+```
+
 ## Requirements
 
 * GPU & CUDA
