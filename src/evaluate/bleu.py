@@ -5,7 +5,7 @@ import torch
 from torchtext.data.metrics import bleu_score
 
 # 利用bleu评估预测序列和真实序列的值
-def bleu_score(data, model, device=None):
+def bleu_evaulate(data, model, device=None):
     '''
     传入的model以预测模式
     :param data:
