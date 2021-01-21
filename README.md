@@ -29,10 +29,16 @@ Chinese chatbot for neural machine translation in PyTorch.
 
 ### 4.seq2seq with Convolutional Neural Network
 * [Convolutional Sequence to Sequence Learning](https://arxiv.org/abs/1705.03122)
-* cnn
-* cnn
+* Encoder：cnn
+* Encoder：cnn
 * ![image](https://raw.githubusercontent.com/jiangnanboy/chatbot_chinese/master/img/seq2seq_convolution1.png)
 * ![image](https://raw.githubusercontent.com/jiangnanboy/chatbot_chinese/master/img/seq2seq_convolution2.png)
+
+### 5.seq2seq with transformer
+* [Attention Is All You Need](https://arxiv.org/abs/1706.03762)
+* Encoder：multi-head-self-attention -> feedforward
+* Encoder：multi-head-self-attention -> multi-head-encoder-attention -> feedforward
+* ![image](https://raw.githubusercontent.com/jiangnanboy/chatbot_chinese/master/img/seq2seq_transformer.png)
 
 ## Use
 - parameters setting
@@ -72,7 +78,11 @@ python seq2seq_pointernet.py -type predict
 python seq2seq_convolution.py -type train
 python seq2seq_convolution.py -type predict
 ```
-
+- [seq2seq_transformer](https://github.com/jiangnanboy/chatbot_chinese/blob/master/src/seq2seq_transformer.py)
+```
+python seq2seq_transformer.py -type train
+python seq2seq_transformer.py -type predict
+```
 ## Note
 
 使用Apex导致的问题：
