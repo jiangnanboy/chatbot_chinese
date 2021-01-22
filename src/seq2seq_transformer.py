@@ -39,7 +39,7 @@ class Encoder(nn.Module):
         # 对词的位置进行embedding
         self.position_embedding = nn.Embedding(position_length, emb_dim)
         # encoder层，有几个encoder层，每个encoder有几个head
-        self.layers = nn.ModuleList([EncoderLayer(emb_dim, n_heads, pf_dim, dropout)] for _ in range(n_layers))
+        self.layers = nn.ModuleList([EncoderLayer(emb_dim, n_heads, pf_dim, dropout) for _ in range(n_layers)])
         self.dropout = nn.Dropout(dropout)
 
     def forward(self, src, src_mask):
@@ -615,7 +615,8 @@ if __name__ == '__main__':
                                                           config.getfloat(section, 'gamma'),
                                                           config.getfloat(section, 'weight_decay'))
 
-        model, optimizer = amp.initialize(model, optimizer, opt_level='O1')
+        # 注意这里的opt_level设为其它值会出现错误：“RuntimeError: CUDA error: CUBLAS_STATUS_EXECUTION_FAILED when calling `cublassGemm”，没看到好的解释
+        model, optimizer = amp.initialize(model, optimizer, opt_level='O0')
 
         train_model(model,
                     train_iterator,

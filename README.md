@@ -98,7 +98,7 @@ ZeroDivisionError: float division by zero
 
 解决办法如下来防止出现梯度溢出：
 
-1、O2换成O1，再不行换成O0
+1、apex中amp.initialize(model, optimizer, opt_level='O0')的opt_level由O2换成O1，再不行换成O0(欧零)
 2、把batchsize从32调整为16会显著解决这个问题，另外在换成O0(欧0)的时候会出现内存不足的情况，减小batchsize也是有帮助的
 3、减少学习率
 4、增加Relu会有效保存梯度，防止梯度消失
